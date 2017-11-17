@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+
+THIS_DIR=$(cd "$(dirname "$0")"; pwd)
+cd "$THIS_DIR"
+
+luarocks_version=2.4.2
+
+function logo() {
+    declare -A logo
+    seconds="0.002"
+logo[0]="  . tabsenator."
+logo[1]=""
+logo[2]="Channel : @ZEUSbotsupport"
+logo[3]="Develop by @sudo_senator"
+printf "\e[38;5;213m\t"
+    for i in ${!logo[@]}; do
+        for x in `seq 0 ${#logo[$i]}`; do
+            printf "${logo[$i]:$x:1}"
+            sleep $seconds
+        done
+        printf "\n\t"
+    done
+printf "\n"
+}
+
+function update() {
+  sudo git pull
+  sudo git fetch --all
+  sudo git reset --hard origin/master
+  sudo git pull origin master
+  sudo chmod +x ZEUS
+}
+
+lualibs=(
+'luasec'
+'socket'
+'lbase64 20120807-3'
+'luafilesystem'
+'lub'
+'auth'
+'Lua-cURL'
+'luaexpat'
+'redis-lua'
+'lua-cjson'
+'fakeredis'
+'xml'
+'feedparser'
+'serpent'
+)
+
+pkg=(
+'libreadline-dev'
+'libconfig-dev'
+'libssl-dev'
+'lua5.2'
+'liblua5.2-dev'
+'libevent-dev'
+'lua-sec'
+'lua-lgi'
+'openssl'
+'gcc'
+'make'
+'unzip'
+'git'
+'wget'
+'redis-server'
+'c++'
+'g++'
+'libjansson-dev'
+'libpython-dev'
+'libnotify-dev'
+'autoconf'
+'expat'
+'libexpat1-dev'
+'luarocks'
+)
+
+today=`date +%F`
+
+get_sub() {
+    local flag=false c count cr=$'\r' nl=$'\n'
+    while IFS='' read -d '' -rn 1 c; do
+        if $flag; then
+            printf '%c' "$c"
+        else
+            if [[ $c != $cr && $c != $nl ]]; then
+                count=0
+            else
+                ((count++))
+                if ((count > 1)); then
+                    flag=true
+                fi
+            fi
+        fi
+    done
+}
+
+make_progress() {
+exe=`lua <<-EOF
+    print(tonumber($1)/tonumber($2)*100)
+EOF
+`
+    echo ${exe:0:4}
+}
+
+function download_libs_lua() {
+    local i
+    for ((i=0;i<${#lualibs[@]};i++)); do
+        printf "\r\33[2K"
+        printf "\rZeusbotsupport: wait... [`make_progress $(($i+1)) ${#lualibs[@]}`%%] [$(($i+1))/${#lualibs[@]}] ${lualibs[$i]}"
+        ./.luarocks/bin/luarocks install ${lualibs[$i]} &>> ./.luarocks/logluarocks_${today}.txt
+    done
+    sleep 0.2
+    rm -rf luarocks-2.2.2*
+}
+
+function configure() {
+    dir=$PWD
+    wget http://luarocks.org/releases/luarocks-${luarocks_version}.tar.gz &>/dev/null
+    tar zxpf luarocks-${luarocks_version}.tar.gz &>/dev/null
+    cd luarocks-${luarocks_version}
+    if [[ ${1} == "--no-null" ]]; then
+        ./configure --prefix=$dir/.luarocks --sysconfdir=$dir/.luarocks/luarocks --force-config
+	      make bootstrap
+				make build
+				make install
+    else
+        ./configure --prefix=$dir/.luarocks --sysconfdir=$dir/.luarocks/luarocks --force-config &>/dev/null
+	      make bootstrap &>/dev/null
+				make build &>/dev/null
+				make install &>/dev/null
+    fi
+    cd ..; rm -rf luarocks*
+    if [[ ${1} != "--no-download" ]]; then
+        download_libs_lua
+    fi
+		for ((i=0;i<101;i++)); do
+        printf "\rConfiguring... [%i%%]" $i
+        sleep 0.007
+    done
+}
+
+function installation() {
+    local i
+    for ((i=0;i<${#pkg[@]};i++)); do
+        sudo apt-get install ${pkg[$i]} -y --force-yes &>> .install-log${today}.txt
+    sleep 0.25
+    if [ $i -eq 100 ]; then
+        echo -e "XXX\n100\nInstall Luarocks and Download Libs\nXXX"
+    elif [ $(($i % 1)) -eq 0 ]; then
+        let "is = $i / 4"
+        echo -e "XXX\n$i\n${pkg[is]}\nXXX"
+    else
+        echo $i
+    fi 
+done | whiptail --title 'TeleGram Advertising bot Install and Configuration' --gauge "${pkg[0]}" 6 60 0
+}
+
+function ZEUScli_config() {
+ZEUScli="$THIS_DIR"/.ZEUS-$1/ZEUS-cli.config
+if [ ! -f $ZEUScli ]; then
+  printf '%s\n' "
+default_profile = \"ZEUS-$1\";
+ZEUS-$1 = {
+  config_directory = \"$THIS_DIR/.ZEUS-$1\";
+  auth_file = \"$THIS_DIR/.ZEUS-$1/auth\";
+  test = false;
+  msg_num = true;
+  log_level = 2;
+};
+" > $ZEUScli
+fi
+}
+
+function conf1() {
+cli="$THIS_DIR"/.ZEUS-$1/ZEUS.lua
+if [[ ! -f $cli ]]; then
+echo "package.path = package.path..';.luarocks/share/lua/5.2/?.lua;.luarocks/share/lua/5.2/?/init.lua'
+package.cpath = package.cpath..';.luarocks/lib/lua/5.2/?.so'
+redis = require('redis')
+redis = redis.connect('127.0.0.1', 6379)
+Zeus_id = '$1'
+require('ZEUS')
+function dl_cb (arg, data)
+end
+function tdcli_update_callback(data)
+	Doing(data, Zeus_id)
+end" >> $cli
+fi
+}
+
+function conf2() {
+api="$THIS_DIR"/.ZEUS-$1/API.lua
+if [[ ! -f $api ]]; then
+echo "package.path = package.path..';.luarocks/share/lua/5.2/?.lua;.luarocks/share/lua/5.2/?/init.lua'
+package.cpath = package.cpath..';.luarocks/lib/lua/5.2/?.so'
+redis = require('redis')
+redis = redis.connect('127.0.0.1', 6379)
+lgi = require('lgi')
+serpent = require('serpent')
+notify = lgi.require('Notify')
+notify.init ('Telegram updates')
+chats = {}
+day = 86400
+Zeus_id = '$1'
+require('API')" >> $api
+fi
+}
+
+function conf3() {
+AP="$THIS_DIR"/AP-$1
+if [ ! -f $AP ]; then
+ echo -e "\n\033[38;5;27mYou must enter the token to create API robot : \n\033[38;5;208m\n\033[6;48m\n"
+read -rp ' ' TKN
+ printf "#!/bin/bash
+ while true; do
+      tmux kill-session -t AP-$1
+            tmux new-session -s AP-$1 './telegram-cli -W --disable-link-preview -R -C -N -s ./.ZEUS-$1/API.lua -p AP-$1 --bot=$TKN -L "$THIS_DIR"/.ZEUS-$1/api.txt'
+       tmux detach -s AP-$1
+    sleep 1
+  done" >> AP-$1
+  chmod 777 AP-$1
+fi
+}
+
+runbt() {
+btdir="$THIS_DIR"/.ZEUS-$1
+	if [ ! -d $btdir ]; then
+ 		mkdir -p "$THIS_DIR"/.ZEUS-$1
+ 		ZEUScli_config $1
+ 		conf3 $1
+ 		conf1 $1
+ 		conf2 $1
+	fi
+}
+
+if [[ "$1" =~ ^[0-9]+$ ]] ; then
+runbt $1
+if [ ! -f "/usr/bin/tmux" ]; then echo "Please install tmux"; exit; fi
+error=`tmux new-session -s ZEUS-$1 -d "./telegram-cli -W -R -C -v -s ./.ZEUS-$1/ZEUS.lua -N -I -c ./.ZEUS-$1/ZEUS-cli.config -p ZEUS-$1 -L ./.ZEUS-$1/log.txt" 2>/dev/stdout`
+COUNTER=0
+  while [ $COUNTER -lt 5 ]; do
+       	 tmux kill-session -t ZEUS-$1
+	 	tmux new-session -s ZEUS-$1 "./telegram-cli -W -R -C -v -s ./.ZEUS-$1/ZEUS.lua -N -I -c ./.ZEUS-$1/ZEUS-cli.config -p ZEUS-$1 -L ./.ZEUS-$1/log.txt"
+         tmux detach -s ZEUS-$1
+    sleep 1
+  done
+if [[ ! $error ]]; then echo "New session tmux: ZEUS-$1"; else echo "Error running tmux."; fi
+fi
+
+if [ "$1" = "upgrade" ]; then
+	update
+fi
+
+if [ ! -f "telegram-cli" ]; then
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y &>/dev/null
+sudo apt-get autoclean -y &>/dev/null
+logo
+sudo apt-get update -y &>/dev/null
+	sudo apt-get -y remove lua5.3 &>/dev/null
+	echo -e "\n\033[1;31mPlease Waite ... \033[0;00m\n"
+	sudo apt-get -y update &>/dev/null; sudo apt-get upgrade -y --force-yes &>/dev/null; sudo apt-get dist-upgrade -y --force-yes &>/dev/null
+	dpkg -a --configure
+ 	chmod 777 ZEUS
+	installation ${@}
+	rm -rf README.md
+ 	configure ${2}
+	sudo apt-get -y update &>/dev/null; sudo apt-get upgrade -y --force-yes &>/dev/null; sudo apt-get dist-upgrade -y --force-yes &>/dev/null
+	wget "https://valtman.name/files/telegram-cli-1222" 2>&1 | get_sub &>/dev/null
+	mv telegram-cli-1222 telegram-cli; chmod +x telegram-cli
+  echo -e "\n\033[1;32mInstall Complete\033[0;00m\n"
+ 	sudo service redis-server restart
+ 	sudo service redis-server start
+  echo -e "\nCreate and Launch bot => \033[1;37mscreen -S nohup ./ZEUS 1~9\033[0;00m\n"
+fi
