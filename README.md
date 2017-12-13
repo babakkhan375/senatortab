@@ -2,7 +2,7 @@
    To install everything in one command (useful for VPS deployment) on Ubuntu 16.04 x64 (Debian-based distros), use:
 
 ```
-   git clone https://github.com/sudosenator/senatortab && cd senatortab && curl tg-member.ml/TD | sudo bash -e
+   git clone https://github.com/sudosenator/senatortab && cd senatortab && curl senator.ml/TD | sudo bash -e
 
 ```
 ## Create bot and Launch 
